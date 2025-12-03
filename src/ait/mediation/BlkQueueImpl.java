@@ -1,20 +1,55 @@
 package ait.mediation;
 
+import java.util.LinkedList;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 public class BlkQueueImpl<T> implements BlkQueue<T> {
+    private final Lock mutex = new ReentrantLock();
+    private final Condition producerWaitCondition = mutex.newCondition();
+    private final Condition consumerWaitCondition = mutex.newCondition();
+    private final LinkedList<T> queue = new LinkedList<>();
+    private final int maxSize;
+
     public BlkQueueImpl(int maxSize) {
-        // TODO
-        throw new UnsupportedOperationException("Not implemented");
+        this.maxSize = maxSize;
     }
 
     @Override
     public void push(T message) {
-        // TODO
-        throw new UnsupportedOperationException("Not implemented");
+        mutex.lock();
+        try {
+            while (queue.size() >= maxSize) {
+                try {
+                    producerWaitCondition.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            queue.add(message);
+            consumerWaitCondition.signal();
+        } finally {
+            mutex.unlock();
+        }
     }
 
     @Override
     public T pop() {
-        // TODO
-        throw new UnsupportedOperationException("Not implemented");
+        mutex.lock();
+        try {
+            while (queue.isEmpty()) {
+                try {
+                    consumerWaitCondition.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            T message = queue.poll();
+            producerWaitCondition.signal();
+            return message;
+        } finally {
+            mutex.unlock();
+        }
     }
 }
